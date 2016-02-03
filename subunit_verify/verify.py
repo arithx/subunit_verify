@@ -1,12 +1,12 @@
 #!/usr/bin/python
 #
 
+import argparse
 import collections
-import datetime
 import io
+import pprint
 import sys
 import traceback
-from xml.sax import saxutils
 
 import subunit
 import testtools
@@ -55,12 +55,13 @@ class VerifyOutput(testtools.TestResult):
 
 class FileAccumulator(testtools.StreamResult):
 
-    def __init__(self):
+    def __init__(self, non_subunit_name='stdout'):
         super(FileAccumulator, self).__init__()
         self.route_codes = collections.defaultdict(io.BytesIO)
+        self.non_subunit_name = non_subunit_name
 
     def status(self, **kwargs):
-        if kwargs.get('file_name') != 'stdout':
+        if kwargs.get('file_name') != self.non_subunit_name:
             return
         file_bytes = kwargs.get('file_bytes')
         if not file_bytes:
@@ -70,21 +71,45 @@ class FileAccumulator(testtools.StreamResult):
         stream.write(file_bytes)
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("Need at least one argument: path to subunit log.")
-        exit(1)
-    subunit_file = sys.argv[1]
-    if len(sys.argv) > 2:
-        test_file = sys.argv[2]
-    else:
-        test_file = 'test_list'
+class VerifyArgumentParser(argparse.ArgumentParser):
+    def __init__(self):
+        desc = "Verifies status of tests against subunit output."
+        usage_string = """
+            subunit-verify [-s/--subunit] [-t/--test-list]
+                [-n/--non-subunit-name] [-o/--output-file]
+        """
 
-    verify_result = VerifyOutput(test_file)
+        super (VerifyArgumentParser, self).__init__(
+            usage=usage_string, description=desc)
+
+        self.prog = "Argument Parser"
+
+        self.add_argument(
+            "-s", "--subunit", metavar="<subunit file>",
+            default=None, help="The path to the subunit output file.")
+
+        self.add_argument(
+            "-t", "--test-list", metavar="<test list file>", default=None,
+            help="The path to the test list file to be verified.")
+
+        # This defaults to stdout as that's the tempest convention
+        self.add_argument(
+            "-n", "--non-subunit-name", metavar="<non subunit name>",
+            default="stdout",
+            help="The name used in subunit to describe the file contents.")
+
+        self.add_argument(
+            "-o", "--output-file", metavar="<output file>", default=None,
+            help="The output file name, if not given defaults to stdout.")
+
+
+def verify_subunit(subunit_file, test_list, non_subunit_name, output_file):
+    verify_result = VerifyOutput(test_list)
     stream = open(subunit_file, 'rb')
-    suite = subunit.ByteStreamToStreamResult(stream, non_subunit_name='stdout')
+    suite = subunit.ByteStreamToStreamResult(
+        stream, non_subunit_name=non_subunit_name)
     result = testtools.StreamToExtendedDecorator(verify_result)
-    accumulator = FileAccumulator()
+    accumulator = FileAccumulator(non_subunit_name)
     result = testtools.StreamResultRouter(result)
     result.add_rule(accumulator, 'test_id', test_id=None)
     result.startTestRun()
@@ -94,8 +119,22 @@ def main():
         suite = subunit.ProtocolTestCase(bytes_io)
         suite.run(html_result)
     result.stopTestRun()
-    print result.test_list
+
+    if not output_file:
+        # using pformat over pprint to keep consistency between stdout & file
+        print pprint.pformat(result.test_list)
+    else:
+        with open(output_file, 'w') as outfile:
+            outfile.write(pprint.pformat(test_list))
+
+
+def entry_point():
+    cl_args = VerifyArgumentParser().parse_args()
+    print cl_args
+    verify_subunit(
+        cl_args.subunit, cl_args.test_list,
+        cl_args.non_subunit_name, cl_args.output_file)
 
 
 if __name__ == '__main__':
-    main()
+    entry_point()
