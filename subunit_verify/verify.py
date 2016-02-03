@@ -4,7 +4,8 @@
 import argparse
 import collections
 import io
-import pprint
+import json
+import re
 import sys
 import traceback
 
@@ -15,7 +16,7 @@ import testtools
 class VerifyOutput(testtools.TestResult):
     def __init__(self, test_file='test_list'):
         super(VerifyOutput, self).__init__()
-        self.test_list = {line: {"status": "Not Found", "message": None}
+        self.test_list = {line: {"status": "Not Ran", "message": None}
                           for line in open(
                             test_file).read().split("\n") if line}
 
@@ -28,7 +29,6 @@ class VerifyOutput(testtools.TestResult):
         output = test.shortDescription() or test.id()
         if output in self.test_list:
             self.test_list[output]["status"] = "Skip"
-            self.test_list[output]["message"] = self.formatErr(err)
 
     def addError(self, test, err):
         output = test.shortDescription() or test.id()
@@ -38,9 +38,18 @@ class VerifyOutput(testtools.TestResult):
 
     def addFailure(self, test, err):
         output = test.shortDescription() or test.id()
-        if output in self.test_list:
+        if output in self.test_list: # if the test itself failed
             self.test_list[output]["status"] = "Fail"
             self.test_list[output]["message"] = self.formatErr(err)
+
+        if "setUpClass" in output: # a fixture failure
+            pat = re.compile("\((.*)\)")
+            match = pat.findall(output)
+            if match:
+                module = match[0].rsplit(".", 1)[0]
+                for key in self.test_list:
+                    if key.startswith(module):
+                        self.test_list[key]["status"] = "Fixture Failure"
 
     def formatErr(self, err):
         exctype, value, tb = err
@@ -51,6 +60,25 @@ class VerifyOutput(testtools.TestResult):
 
     def startTestRun(self):
         super(VerifyOutput, self).startTestRun()
+
+    def print_stats(self):
+        print "====="
+        print "Stats"
+        print "====="
+        print " - Total: {0}".format(len(self.test_list))
+        print " - Passed: {0}".format(sum([
+            1 for key, val in self.test_list if val["status"] == "Pass"]))
+        print " - Failed: {0}".format(sum([
+            1 for key, val in self.test_list if val["status"] == "Fail"]))
+        print " - Errored: {0}".format(sum([
+            1 for key, val in self.test_list if val["status"] == "Error"]))
+        print " - Skipped: {0}".format(sum([
+            1 for key, val in self.test_list if val["status"] == "Skip"]))
+        print " - Fixture Failures: {0}".format(sum([
+            1 for key, val in self.test_list
+            if val["status"] == "Fixture Failure"]))
+        print " - Not Ran: {0}".format(sum([
+            1 for key, val in self.test_list if val["status"] == "Not Ran"]))
 
 
 class FileAccumulator(testtools.StreamResult):
@@ -100,7 +128,7 @@ class VerifyArgumentParser(argparse.ArgumentParser):
 
         self.add_argument(
             "-o", "--output-file", metavar="<output file>", default=None,
-            help="The output file name, if not given defaults to stdout.")
+            help="The output file name for the json.")
 
 
 def verify_subunit(subunit_file, test_list, non_subunit_name, output_file):
@@ -120,12 +148,10 @@ def verify_subunit(subunit_file, test_list, non_subunit_name, output_file):
         suite.run(verify_result)
     result.stopTestRun()
 
-    if not output_file:
-        # using pformat over pprint to keep consistency between stdout & file
-        print pprint.pformat(result.test_list)
-    else:
+    verify_result.print_stats()
+    if output_file:
         with open(output_file, 'w') as outfile:
-            outfile.write(pprint.pformat(test_list))
+            outfile.write(json.dumps(verify_result.test_list))
 
 
 def entry_point():
