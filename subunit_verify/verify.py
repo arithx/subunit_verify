@@ -6,7 +6,6 @@ import collections
 import io
 import json
 import re
-import sys
 import traceback
 
 import subunit
@@ -18,7 +17,7 @@ class VerifyOutput(testtools.TestResult):
         super(VerifyOutput, self).__init__()
         self.test_list = {line: {"status": "Not Ran", "message": None}
                           for line in open(
-                            test_file).read().split("\n") if line}
+                              test_file).read().split("\n") if line}
 
     def addSuccess(self, test):
         output = test.shortDescription() or test.id()
@@ -38,11 +37,11 @@ class VerifyOutput(testtools.TestResult):
 
     def addFailure(self, test, err):
         output = test.shortDescription() or test.id()
-        if output in self.test_list: # if the test itself failed
+        if output in self.test_list:  # if the test itself failed
             self.test_list[output]["status"] = "Fail"
             self.test_list[output]["message"] = self.formatErr(err)
 
-        if "setUpClass" in output: # a fixture failure
+        if "setUpClass" in output:  # a fixture failure
             pat = re.compile("\((.*)\)")
             match = pat.findall(output)
             if match:
@@ -67,18 +66,23 @@ class VerifyOutput(testtools.TestResult):
         print "====="
         print " - Total: {0}".format(len(self.test_list))
         print " - Passed: {0}".format(sum([
-            1 for key, val in self.test_list if val["status"] == "Pass"]))
+            1 for key, val in self.test_list.iteritems()
+            if val["status"] == "Pass"]))
         print " - Failed: {0}".format(sum([
-            1 for key, val in self.test_list if val["status"] == "Fail"]))
+            1 for key, val in self.test_list.iteritems()
+            if val["status"] == "Fail"]))
         print " - Errored: {0}".format(sum([
-            1 for key, val in self.test_list if val["status"] == "Error"]))
+            1 for key, val in self.test_list.iteritems()
+            if val["status"] == "Error"]))
         print " - Skipped: {0}".format(sum([
-            1 for key, val in self.test_list if val["status"] == "Skip"]))
+            1 for key, val in self.test_list.iteritems()
+            if val["status"] == "Skip"]))
         print " - Fixture Failures: {0}".format(sum([
-            1 for key, val in self.test_list
+            1 for key, val in self.test_list.iteritems()
             if val["status"] == "Fixture Failure"]))
         print " - Not Ran: {0}".format(sum([
-            1 for key, val in self.test_list if val["status"] == "Not Ran"]))
+            1 for key, val in self.test_list.iteritems()
+            if val["status"] == "Not Ran"]))
 
 
 class FileAccumulator(testtools.StreamResult):
@@ -107,7 +111,7 @@ class VerifyArgumentParser(argparse.ArgumentParser):
                 [-n/--non-subunit-name] [-o/--output-file]
         """
 
-        super (VerifyArgumentParser, self).__init__(
+        super(VerifyArgumentParser, self).__init__(
             usage=usage_string, description=desc)
 
         self.prog = "Argument Parser"
@@ -142,7 +146,7 @@ def verify_subunit(subunit_file, test_list, non_subunit_name, output_file):
     result.add_rule(accumulator, 'test_id', test_id=None)
     result.startTestRun()
     suite.run(result)
-    for bytes_io in accumulator.route_codes.values(): # v1 processing
+    for bytes_io in accumulator.route_codes.values():  # v1 processing
         bytes_io.seek(0)
         suite = subunit.ProtocolTestCase(bytes_io)
         suite.run(verify_result)
