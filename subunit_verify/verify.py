@@ -117,7 +117,7 @@ def verify_subunit(subunit_file, test_list, non_subunit_name, output_file):
     for bytes_io in accumulator.route_codes.values(): # v1 processing
         bytes_io.seek(0)
         suite = subunit.ProtocolTestCase(bytes_io)
-        suite.run(html_result)
+        suite.run(verify_result)
     result.stopTestRun()
 
     if not output_file:
@@ -130,11 +130,6 @@ def verify_subunit(subunit_file, test_list, non_subunit_name, output_file):
 
 def entry_point():
     cl_args = VerifyArgumentParser().parse_args()
-    print cl_args
     verify_subunit(
         cl_args.subunit, cl_args.test_list,
         cl_args.non_subunit_name, cl_args.output_file)
-
-
-if __name__ == '__main__':
-    entry_point()

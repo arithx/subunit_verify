@@ -7,6 +7,7 @@ setup(
     author='Stephen Lowrie',
     author_email='stephen.lowrie@rackspace.com',
     url='https://github.com/arithx/subunit_verify',
+    packages=find_packages(exclude=('tests*', 'docs')),
     install_requires=open('requirements.txt').read(),
     license=open('LICENSE').read(),
     classifiers=(
