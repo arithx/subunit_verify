@@ -29,6 +29,15 @@ class VerifyOutput(testtools.TestResult):
         if output in self.test_list:
             self.test_list[output]["status"] = "Skip"
 
+        if "setUpClass" in output:  # a fixture failure
+            pat = re.compile("\((.*)\)")
+            match = pat.findall(output)
+            if match:
+                module = match[0].rsplit(".", 1)[0]
+                for key in self.test_list:
+                    if key.startswith(module):
+                        self.test_list[key]["status"] = "Skip"
+
     def addError(self, test, err):
         output = test.shortDescription() or test.id()
         if output in self.test_list:
